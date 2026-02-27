@@ -1,0 +1,5 @@
+Timeout = 10
+ChunkSize = 326
+Retry = 3
+IdleConnTimeout = 10
+ResponseHeaderTimeout = 10
