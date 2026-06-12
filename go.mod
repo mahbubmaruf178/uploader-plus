@@ -3,13 +3,13 @@ module uploaderplus
 go 1.25
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/gorilla/websocket v1.5.3
-	github.com/wailsapp/wails/v3 v3.0.0-alpha.71
+	github.com/wailsapp/wails/v3 v3.0.0-alpha.74
 )
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
-	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.3.0 // indirect
 	github.com/adrg/xdg v0.5.3 // indirect

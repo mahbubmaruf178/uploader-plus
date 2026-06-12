@@ -1,25 +1,29 @@
 [vidara]
-ftp = "ftp://vidara.io/upload"
-upload = "https://vidara.io/upload"
+ftp_url = "ftp://vidara.io/upload"
+upload_url = "https://vidara.io/upload"
 
-  [[vidara.credentoial]]
-  type = "ftp"
+  [[vidara.ftp]]
+  title = "vidara ftp"
   user = "ghgfh"
   pass = "hgfhfgh"
 
-  [[vidara.credentoial]]
-  type = "upload"
-  api_key = ""
+  [[vidara.upload]]
+  title = "vidara upload"
+  api_key = "6546dfgh"
+
+  [[vidara.upload]]
+  title = "vidara upload 2 "
+  api_key = "vbcge6"
 
 [streamtape]
-ftp = "ftp://streamtape.com/upload"
-upload = "https://streamtape.com/upload"
+ftp_url = "ftp://streamtape.com/upload"
+upload_url = "https://streamtape.com/upload"
 
-  [[streamtape.credentoial]]
-  type = "ftp"
+  [[streamtape.ftp]]
+  title = "streamtape ftp"
   user = "hgffgh"
-  pass = ""
+  pass = "gfdgfdg"
 
-  [[streamtape.credentoial]]
-  type = "upload"
+  [[streamtape.upload]]
+  title = "streamtape upload"
   api_key = "fhfgh"
