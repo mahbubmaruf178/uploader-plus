@@ -9,50 +9,58 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Msg represents a generic map payload for socket message bodies.
 type Msg map[string]any
+
+// Message defines the structure of events exchanged between the frontend and the backend.
 type Message struct {
-	Event  string         `json:"event"`
-	Data   map[string]any `json:"data"`
-	Status int            `json:"status"`
-}
-type Payloder struct {
-	Event  string         `json:"event"`
-	Data   map[string]any `json:"data"`
-	Status int            `json:"status"`
+	Event  string         `json:"event"`  // Event type/path name
+	Data   map[string]any `json:"data"`   // Payload data
+	Status int            `json:"status"` // Operational status code
 }
 
-func (p *Payloder) StringVal(key string) string {
-	return fmt.Sprintf("Event: %s, Data: %v", p.Event, p.Data[key])
+// StringVal returns the string representation of a key's value in the message data.
+func (m *Message) StringVal(key string) string {
+	return fmt.Sprintf("Event: %s, Data: %v", m.Event, m.Data[key])
 }
 
-func (p *Payloder) IntVal(key string) int {
-	return p.Data[key].(int)
+// IntVal attempts to extract and return the integer value associated with the specified key in the message data.
+func (m *Message) IntVal(key string) int {
+	if val, ok := m.Data[key].(int); ok {
+		return val
+	}
+	if val, ok := m.Data[key].(float64); ok {
+		return int(val)
+	}
+	return 0
 }
 
+// Ctx represents the client context details, wrapping connection lifecycle and helper states.
 type Ctx struct {
-	conn          *websocket.Conn
-	Send          chan Message  // send data to client
-	IsClientClose chan struct{} // close event for track client close , it usefull for long running task . if client close then task can be cancelled throw this channel
-	// path          string        // Optional: for identifying specific routes
-	Payload *Payloder // Optional: for sending additional data
-	UserID  string
+	hub           *Hub            // Pointer to the parent Hub managing connections
+	conn          *websocket.Conn // The underlying WebSocket connection
+	Send          chan Message    // Channel to stream message payloads to the client
+	IsClientClose chan struct{}   // Signal channel indicating client disconnection
+	Payload       *Message        // Holds the last request message payload
+	UserID        string          // Unique client UUID identifier
 }
 
+// upgrader configures the buffer sizes and origin checks for upgrading WebSocket connections.
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// In production, implement proper origin checking
 		return true
 	},
 }
 
+// readPump loops continuously to read incoming client payloads and dispatch events to the router.
 func (c *Ctx) readPump() {
-	HubManager.AddClient(c)
+	c.hub.AddClient(c)
 	c.IsClientClose = make(chan struct{})
 
 	defer func() {
-		HubManager.RemoveClient(c)
+		c.hub.RemoveClient(c)
 		c.conn.Close()
 		close(c.IsClientClose)
 	}()
@@ -64,33 +72,24 @@ func (c *Ctx) readPump() {
 	})
 
 	for {
-		var msg Payloder
+		var msg Message
 
-		// Blocking until a message arrives or error
 		err := c.conn.ReadJSON(&msg)
-
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket error: %v", err)
+				log.Printf("WebSocket read error: %v", err)
 			}
-			break // exit on read failure
+			break
 		}
 
-		// Update client context with message details
-
-		// flog.Log.Debug().Msg(fmt.Sprint(msg))
-		// c.path = msg.Event
 		c.Payload = &msg
-
-		// c.UserID = uuid.New().String()
-
-		// Dispatch synchronously to avoid excess goroutines
-		HubManager.Router.Dispatch(c, msg.Event)
+		c.hub.Router.Dispatch(c, msg.Event)
 	}
 }
 
+// writePump handles processing heartbeat pings and pushing messages to the client WebSocket.
 func (c *Ctx) writePump() {
-	ticker := time.NewTicker(54 * time.Second) // Heartbeat every 54 seconds
+	ticker := time.NewTicker(54 * time.Second)
 	defer func() {
 		ticker.Stop()
 		c.conn.Close()
@@ -106,7 +105,7 @@ func (c *Ctx) writePump() {
 			}
 
 			if err := c.conn.WriteJSON(msg); err != nil {
-				log.Printf("Write error: %v", err)
+				log.Printf("WebSocket write error: %v", err)
 				return
 			}
 
@@ -119,12 +118,15 @@ func (c *Ctx) writePump() {
 	}
 }
 
+// Path returns the path/event name of the client payload.
 func (c *Ctx) Path() string {
-	//  get path from paylaod
+	if c.Payload == nil {
+		return ""
+	}
 	return c.Payload.Event
 }
 
-// steam data to the client via websocket
+// Stream sends messages from a data channel to the client, handling connection drops gracefully.
 func (c *Ctx) Stream(ch <-chan Message, cancelChan <-chan struct{}) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -132,33 +134,32 @@ func (c *Ctx) Stream(ch <-chan Message, cancelChan <-chan struct{}) {
 	for {
 		select {
 		case <-c.IsClientClose:
-			//while client is closed
 			return
 
 		case <-cancelChan:
-			// while cancel channel is closed
 			return
 
 		case msg, ok := <-ch:
 			if !ok {
 				return
 			}
-			// sending to client
 			c.Send <- msg
 		}
 	}
 }
 
-func PayloadAs[T any](payload *Payloder, key string) T {
-	if val, ok := payload.Data[key].(T); ok {
+// PayloadAs extracts data properties from the message and casts them to the specified generic type.
+func PayloadAs[T any](msg *Message, key string) T {
+	if val, ok := msg.Data[key].(T); ok {
 		return val
 	}
 	var zero T
 	return zero
 }
 
-func PayloadInt64(payload *Payloder, key string) int64 {
-	val, ok := payload.Data[key]
+// PayloadInt64 retrieves an integer property from the message data, matching float64/int/int64 formats.
+func PayloadInt64(msg *Message, key string) int64 {
+	val, ok := msg.Data[key]
 	if !ok {
 		return 0
 	}
@@ -172,13 +173,16 @@ func PayloadInt64(payload *Payloder, key string) int64 {
 	}
 	return 0
 }
+
+// Write posts map payload details back to the client event path.
 func (c *Ctx) Write(msg map[string]any) {
 	c.Send <- Message{
 		Event: c.Path(),
 		Data:  msg,
 	}
-
 }
+
+// JSON posts structured JSON status messages back to the client event path.
 func (c *Ctx) JSON(status int, msg map[string]any) {
 	c.Send <- Message{
 		Event:  c.Path(),
@@ -186,6 +190,8 @@ func (c *Ctx) JSON(status int, msg map[string]any) {
 		Status: status,
 	}
 }
+
+// JSONMap creates a key-value map from raw elements and writes a JSON status payload response.
 func (c *Ctx) JSONMap(status int, kv ...any) {
 	res := map[string]any{}
 	for i := 0; i < len(kv); i += 2 {

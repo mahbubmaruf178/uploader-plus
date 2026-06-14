@@ -2,43 +2,62 @@ package SockR
 
 import (
 	"log"
+	"net/http"
 	"sync"
+
+	"github.com/google/uuid"
 )
 
-var (
-	hubOnce    sync.Once
-	HubManager *Hub
-)
-
+// Hub coordinates active WebSocket client sessions and routes incoming traffic.
 type Hub struct {
-	clients map[*Ctx]bool
-	Router  *Router
-	mu      sync.RWMutex
+	Router  *Router       // The router used for matching and dispatching client event paths
+	clients map[*Ctx]bool // Map tracking all currently active client contexts
+	mu      sync.RWMutex  // Mutex to synchronize client map operations
 }
 
-func NewHub(newRouter *Router) *Hub {
-	hubOnce.Do(func() {
-		h := &Hub{
-			clients: make(map[*Ctx]bool),
-			Router:  newRouter,
-			mu:      sync.RWMutex{},
-		}
-		HubManager = h
-	})
-	return HubManager
+// NewHub instantiates a new Hub, initializing its internal route map and client list.
+func NewHub(router *Router) *Hub {
+	return &Hub{
+		Router:  router,
+		clients: make(map[*Ctx]bool),
+	}
 }
 
+// ServeHTTP upgrades incoming HTTP connection requests to WebSockets and boots read/write pumps.
+func (h *Hub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade error: %v", err)
+		return
+	}
+
+	userID := uuid.New().String()
+
+	client := &Ctx{
+		hub:           h,
+		conn:          conn,
+		Send:          make(chan Message, 256),
+		IsClientClose: make(chan struct{}),
+		UserID:        userID,
+	}
+
+	go client.readPump()
+	client.writePump()
+}
+
+// AddClient registers a new client session in the hub and writes a welcome event response.
 func (h *Hub) AddClient(client *Ctx) {
 	h.mu.Lock()
 	h.clients[client] = true
 	h.mu.Unlock()
-	log.Printf("Ctx connected. Total clients: %d", len(h.clients))
+	log.Printf("Client connected (%s). Total clients: %d", client.UserID, len(h.clients))
 	client.Send <- Message{
 		Event: "welcome",
-		Data:  map[string]interface{}{"message": "Welcome to the server!"},
+		Data:  map[string]any{"message": "Welcome to the server!"},
 	}
 }
 
+// RemoveClient unregisters a client connection from the hub and closes its transmission channel.
 func (h *Hub) RemoveClient(client *Ctx) {
 	h.mu.Lock()
 	if _, ok := h.clients[client]; ok {
@@ -46,5 +65,5 @@ func (h *Hub) RemoveClient(client *Ctx) {
 		close(client.Send)
 	}
 	h.mu.Unlock()
-	log.Printf("Ctx disconnected. Total clients: %d", len(h.clients))
+	log.Printf("Client disconnected (%s). Total clients: %d", client.UserID, len(h.clients))
 }
