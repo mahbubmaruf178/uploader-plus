@@ -57,7 +57,6 @@ var upgrader = websocket.Upgrader{
 // readPump loops continuously to read incoming client payloads and dispatch events to the router.
 func (c *Ctx) readPump() {
 	c.hub.AddClient(c)
-	c.IsClientClose = make(chan struct{})
 
 	defer func() {
 		c.hub.RemoveClient(c)
@@ -143,7 +142,7 @@ func (c *Ctx) Stream(ch <-chan Message, cancelChan <-chan struct{}) {
 			if !ok {
 				return
 			}
-			c.Send <- msg
+			c.SafeSend(msg)
 		}
 	}
 }
@@ -174,21 +173,36 @@ func PayloadInt64(msg *Message, key string) int64 {
 	return 0
 }
 
+// SafeSend writes a message to the client send channel, recovering if the channel has been closed.
+func (c *Ctx) SafeSend(msg Message) {
+	defer func() {
+		if r := recover(); r != nil {
+			// Recover from panic on closed channel if client disconnected concurrently
+		}
+	}()
+
+	select {
+	case <-c.IsClientClose:
+		return
+	case c.Send <- msg:
+	}
+}
+
 // Write posts map payload details back to the client event path.
 func (c *Ctx) Write(msg map[string]any) {
-	c.Send <- Message{
+	c.SafeSend(Message{
 		Event: c.Path(),
 		Data:  msg,
-	}
+	})
 }
 
 // JSON posts structured JSON status messages back to the client event path.
 func (c *Ctx) JSON(status int, msg map[string]any) {
-	c.Send <- Message{
+	c.SafeSend(Message{
 		Event:  c.Path(),
 		Data:   msg,
 		Status: status,
-	}
+	})
 }
 
 // JSONMap creates a key-value map from raw elements and writes a JSON status payload response.

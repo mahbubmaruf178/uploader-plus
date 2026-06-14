@@ -4,6 +4,136 @@ import { html } from "/lib/preact/html.js";
 import { Router, Link } from "/lib/preact/router/preact-router.mjs";
 import ws from "/lib/ws.js";
 import TorrentPage from "./page/Torrent.js";
+import { FileManager } from "./page/filemanager.js";
+import { HostManager } from "./page/hostmanager.js";
+import { HostFilesManager } from "./page/hostfilesmanager.js";
+import { createMemoryHistory } from "/lib/preact/history.mjs";
+
+const memoryHistory = createMemoryHistory();
+
+function Sidebar({ currentUrl }) {
+  const [wsState, setWsState] = useState("connecting");
+
+  useEffect(() => {
+    if (ws.socket && ws.socket.readyState === WebSocket.OPEN) {
+      setWsState("connected");
+    }
+    const handleOpen = () => setWsState("connected");
+    const handleClose = () => setWsState("disconnected");
+    const handleError = () => setWsState("disconnected");
+
+    ws.on("ws/open", handleOpen);
+    ws.on("ws/close", handleClose);
+    ws.on("ws/error", handleError);
+
+    return () => {
+      ws.off("ws/open", handleOpen);
+      ws.off("ws/close", handleClose);
+      ws.off("ws/error", handleError);
+    };
+  }, []);
+
+  const navGroups = [
+    {
+      title: "SERVICES",
+      links: [
+        { href: "/", label: "Dashboard", icon: "📊" },
+        { href: "/torrent", label: "Torrent Manager", icon: "📦" },
+        { href: "/files", label: "File Manager", icon: "📂" }
+      ]
+    },
+    {
+      title: "SYSTEM",
+      links: [
+        { href: "/host", label: "Host Manager", icon: "⚙️" },
+        { href: "/host-files", label: "Host Files", icon: "☁️" }
+      ]
+    }
+  ];
+
+  return html`
+    <aside class="w-64 bg-[#0B0F19] border-r border-slate-800 flex flex-col h-full shrink-0 select-none">
+      <!-- Logo / Branding -->
+      <div class="p-6 border-b border-slate-850 flex items-center gap-3">
+        <div class="h-9 w-9 rounded-xl bg-gradient-to-tr from-indigo-500 via-violet-500 to-fuchsia-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20 text-lg">
+          U+
+        </div>
+        <div>
+          <h1 class="text-md font-bold tracking-tight text-white">Uploader <span class="text-indigo-400">Plus</span></h1>
+          <p class="text-[10px] text-slate-500 font-semibold font-mono tracking-wider">IPC WEB CONTROL</p>
+        </div>
+      </div>
+
+      <!-- Search Section -->
+      <div class="px-4 pt-4 pb-2">
+        <div class="relative">
+          <input
+            type="text"
+            placeholder="Search console..."
+            class="w-full py-2 pl-9 pr-4 rounded-xl bg-slate-900 border border-slate-800/80 focus:border-indigo-500/60 focus:ring-1 focus:ring-indigo-500/30 text-xs placeholder-slate-600 transition-all outline-none text-slate-200"
+          />
+          <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-600 text-xs">🔍</span>
+        </div>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav class="flex-1 px-3 py-4 space-y-6 overflow-y-auto scrollbar-thin">
+        ${navGroups.map(group => html`
+          <div key=${group.title} class="space-y-2">
+            <h3 class="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest">${group.title}</h3>
+            <div class="space-y-1">
+              ${group.links.map(link => {
+    const isActive = currentUrl === link.href;
+    return html`
+                  <${Link} 
+                    key=${link.href}
+                    href=${link.href}
+                    class=${`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${isActive
+        ? "bg-indigo-500/10 text-indigo-400 shadow-sm border border-indigo-500/10"
+        : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/30"
+      }`}
+                  >
+                    <div class="flex items-center gap-3">
+                      <span class="text-sm">${link.icon}</span>
+                      <span>${link.label}</span>
+                    </div>
+                  <//>
+                `;
+  })}
+            </div>
+          </div>
+        `)}
+      </nav>
+
+      <!-- Bottom Profile / Connection -->
+      <div class="p-4 border-t border-slate-850 bg-slate-950/20 space-y-4">
+        <!-- Connection Status -->
+        <div class="flex items-center justify-between px-3 py-2 rounded-xl border text-[10px] font-bold tracking-wider uppercase
+          ${wsState === "connected" ? "bg-emerald-500/5 border-emerald-500/10 text-emerald-400" : ""}
+          ${wsState === "connecting" ? "bg-amber-500/5 border-amber-500/10 text-amber-400" : ""}
+          ${wsState === "disconnected" ? "bg-rose-500/5 border-rose-500/10 text-rose-400" : ""}
+        ">
+          <span class="flex items-center gap-2">
+            <span class="relative flex h-1.5 w-1.5">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75
+                ${wsState === "connected" ? "bg-emerald-400" : ""}
+                ${wsState === "connecting" ? "bg-amber-400" : ""}
+                ${wsState === "disconnected" ? "bg-rose-400" : ""}
+              "></span>
+              <span class="relative inline-flex rounded-full h-1.5 w-1.5
+                ${wsState === "connected" ? "bg-emerald-500" : ""}
+                ${wsState === "connecting" ? "bg-amber-500" : ""}
+                ${wsState === "disconnected" ? "bg-rose-500" : ""}
+              "></span>
+            </span>
+            <span>SYSTEM TRANSPORT</span>
+          </span>
+          <span class="font-mono text-[9px]">${wsState}</span>
+        </div>
+      </div>
+    </aside>
+  `;
+}
 
 // Helper to format byte sizes to human-readable strings
 const formatBytes = (bytes) => {
@@ -75,57 +205,17 @@ function Dashboard() {
   };
 
   return html`
-    <div class="min-h-screen bg-[#090D16] text-slate-100 font-sans antialiased selection:bg-indigo-500 selection:text-white pb-12">
-      <!-- Top Header -->
-      <header class="border-b border-slate-800 bg-[#0D1527]/80 backdrop-blur-md sticky top-0 z-50">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="h-9 w-9 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/20">
-              U+
-            </div>
-            <div>
-              <h1 class="text-lg font-bold tracking-tight text-white">Uploader <span class="text-indigo-400">Plus</span></h1>
-              <p class="text-xs text-slate-400">WebSocket Transport Control</p>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-4">
-            <!-- Navigation -->
-            <nav class="flex items-center gap-2">
-              <Link href="/" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">
-                Dashboard
-              </Link>
-              <Link href="/torrent" class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors text-slate-400 hover:text-slate-300 hover:bg-slate-800/50">
-                Torrent
-              </Link>
-            </nav>
-
-            <!-- Connection Status -->
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-semibold
-              ${wsState === "connected" ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400" : ""}
-              ${wsState === "connecting" ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : ""}
-              ${wsState === "disconnected" ? "bg-rose-500/10 border-rose-500/30 text-rose-400" : ""}
-            ">
-              <span class="relative flex h-2 w-2">
-                <span class="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75
-                  ${wsState === "connected" ? "bg-emerald-400" : ""}
-                  ${wsState === "connecting" ? "bg-amber-400" : ""}
-                  ${wsState === "disconnected" ? "bg-rose-400" : ""}
-                "></span>
-                <span class="relative inline-flex rounded-full h-2 w-2
-                  ${wsState === "connected" ? "bg-emerald-500" : ""}
-                  ${wsState === "connecting" ? "bg-amber-500" : ""}
-                  ${wsState === "disconnected" ? "bg-rose-500" : ""}
-                "></span>
-              </span>
-              ${wsState.charAt(0).toUpperCase() + wsState.slice(1)}
-            </div>
-          </div>
+    <div class="p-6 max-w-5xl mx-auto space-y-6">
+      <!-- Page Header -->
+      <div class="flex items-center justify-between pb-6 border-b border-slate-800">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight text-white">System Dashboard</h1>
+          <p class="text-sm text-slate-400">WebSocket Transport Controller & Latency Inspector</p>
         </div>
-      </header>
+      </div>
 
       <!-- Main Dashboard Content -->
-      <main class="max-w-6xl mx-auto px-4 mt-8">
+      <main class="mt-6">
         
         <!-- Welcome Alert Bar -->
         ${lastWelcome && html`
@@ -161,12 +251,12 @@ function Dashboard() {
                   onClick=${triggerTest}
                   disabled=${testRunning || wsState !== "connected"}
                   class="relative px-6 py-3.5 rounded-xl font-semibold shadow-lg transition-all duration-200 flex items-center justify-center gap-2 select-none group
-                    ${wsState !== "connected" 
-                      ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700" 
-                      : testRunning 
-                        ? "bg-indigo-600/50 text-indigo-200 cursor-wait" 
-                        : "bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer active:scale-95 active:bg-indigo-700"
-                    }
+                    ${wsState !== "connected"
+      ? "bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700"
+      : testRunning
+        ? "bg-indigo-600/50 text-indigo-200 cursor-wait"
+        : "bg-indigo-600 hover:bg-indigo-500 text-white cursor-pointer active:scale-95 active:bg-indigo-700"
+    }
                   "
                 >
                   ${testRunning && html`
@@ -204,7 +294,7 @@ function Dashboard() {
               </div>
 
               ${testResult && testResult.config
-                ? html`
+      ? html`
                     <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
                       <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
                         <span class="block text-xs text-slate-400 mb-1">Upload Timeout</span>
@@ -232,7 +322,7 @@ function Dashboard() {
                       </div>
                     </div>
                   `
-                : html`
+      : html`
                     <div class="border border-dashed border-slate-800 rounded-xl p-8 text-center bg-slate-900/10">
                       <svg class="mx-auto h-8 w-8 text-slate-500 mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M7.5 14.25v2.25m3-4.5v4.5m3-6.75v6.75m3-9v9M6 20.25h12A2.25 2.25 0 0 0 20.25 18V6A2.25 2.25 0 0 0 18 3.75H6A2.25 2.25 0 0 0 3.75 6v12A2.25 2.25 0 0 0 6 20.25Z" />
@@ -241,7 +331,7 @@ function Dashboard() {
                       <p class="text-xs text-slate-500 mt-1">Run the connection test above to trigger synchronization with host configuration.</p>
                     </div>
                   `
-              }
+    }
             </div>
 
             <!-- Latest Response Inspector -->
@@ -276,16 +366,16 @@ function Dashboard() {
 
               <!-- Terminal Lines -->
               <div class="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-thin">
-                ${testLogs.length === 0 
-                  ? html`
+                ${testLogs.length === 0
+      ? html`
                       <div class="h-full flex flex-col items-center justify-center text-slate-500 text-center p-4">
                         <svg class="h-8 w-8 opacity-40 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                         <span class="text-xs">No records in the logs console</span>
                       </div>
-                    ` 
-                  : testLogs.map((log) => html`
+                    `
+      : testLogs.map((log) => html`
                       <div key=${log.id} class="p-3 rounded-xl bg-slate-950/60 border border-slate-900/50 flex flex-col gap-1.5 hover:border-slate-800 transition-colors">
                         <div class="flex items-center justify-between">
                           <span class="text-[10px] text-indigo-400 font-mono font-medium">${log.timestamp}</span>
@@ -302,7 +392,7 @@ function Dashboard() {
                         </div>
                       </div>
                     `)
-                }
+    }
               </div>
             </div>
           </div>
@@ -314,11 +404,30 @@ function Dashboard() {
 }
 
 function App() {
+  const [currentUrl, setCurrentUrl] = useState("/");
+
+  const handleRoute = (e) => {
+    setCurrentUrl(e.url);
+  };
+
   return html`
-    <${Router}>
-      
-      <${TorrentPage} path="/" />
-    <//Router>
+    <div class="flex h-screen overflow-hidden bg-[#090D16] text-slate-100 font-sans antialiased">
+      <!-- Sidebar Navigation on Left -->
+      <${Sidebar} currentUrl=${currentUrl} />
+
+      <!-- Main Content on Right -->
+      <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div class="flex-1 overflow-y-auto min-h-0">
+          <${Router} history=${memoryHistory} onChange=${handleRoute}>
+            <${Dashboard} path="/" />
+            <${TorrentPage} path="/torrent" />
+            <${FileManager} path="/files" />
+            <${HostManager} path="/host" />
+            <${HostFilesManager} path="/host-files" />
+          <//Router>
+        </div>
+      </div>
+    </div>
   `;
 }
 

@@ -173,6 +173,13 @@ class WebSocketEventHandler {
     return this; // Allow chaining
   }
 
+  off(eventType, handler) {
+    if (this.handlers[eventType] === handler) {
+      delete this.handlers[eventType];
+    }
+    return this;
+  }
+
   get(eventType) {
     return new Promise((resolve, reject) => {
       this.on(eventType, resolve);

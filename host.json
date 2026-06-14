@@ -1,0 +1,40 @@
+{
+  "vidara": {
+    "ftp_url": "ftp://vidara.io/upload",
+    "upload_url": "https://vidara.io/upload",
+    "ftp": [
+      {
+        "title": "vidara ftp",
+        "user": "ghgfh",
+        "pass": "hgfhfgh"
+      }
+    ],
+    "upload": [
+      {
+        "title": "vidara upload",
+        "api_key": "6546dfgh"
+      },
+      {
+        "title": "vidara upload 2 ",
+        "api_key": "vbcge6"
+      }
+    ]
+  },
+  "streamtape": {
+    "ftp_url": "ftp://streamtape.com/upload",
+    "upload_url": "https://streamtape.com/upload",
+    "ftp": [
+      {
+        "title": "streamtape ftp",
+        "user": "hgffgh",
+        "pass": "gfdgfdg"
+      }
+    ],
+    "upload": [
+      {
+        "title": "streamtape upload",
+        "api_key": "fhfgh"
+      }
+    ]
+  }
+}

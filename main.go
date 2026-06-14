@@ -3,7 +3,10 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
 	sockr "uploaderplus/pkg/SockR"
+	"uploaderplus/services/filemanager"
 	"uploaderplus/services/host"
 	"uploaderplus/services/torrent"
 	// "github.com/wailsapp/wails/v3/pkg/application"
@@ -21,11 +24,20 @@ func main() {
 			log.Println("Torrent Manager initialized successfully")
 		}
 
-		router := sockr.NewRouter(host.InitRoutes, torrent.InitRoutes)
+		router := sockr.NewRouter(host.InitRoutes, torrent.InitRoutes, filemanager.InitRoutes)
 		hub := sockr.NewHub(router)
 
-		http.Handle("/", fs)
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			path := filepath.Join("./assets", r.URL.Path)
+			info, err := os.Stat(path)
+			if err == nil && !info.IsDir() {
+				fs.ServeHTTP(w, r)
+				return
+			}
+			http.ServeFile(w, r, "./assets/index.html")
+		})
 		http.Handle("/ws", hub)
+		http.HandleFunc("/api/upload", filemanager.HandleUpload)
 
 		log.Println("HTTP Server: http://localhost:8080")
 

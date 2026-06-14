@@ -114,6 +114,7 @@ func NewTorrentManager(dataDir, sessionPath string) (*TorrentManager, error) {
 	// cfg.DisableUTP = true
 	// cfg.DisableTCP = true
 	cfg.Seed = false
+	// cfg.DownloadRateLimiter = limiter.New(1024*1024, 1) // 1 MB/s
 
 	client, err := torrent.NewClient(cfg)
 	if err != nil {
@@ -568,4 +569,30 @@ func getFreeDiskSpace(path string) int64 {
 		return 0
 	}
 	return int64(freeBytesAvailable)
+}
+
+// delete all files in downloads folder
+func (m *TorrentManager) DeleteAllFiles() {
+	files, err := os.ReadDir(m.dataDir)
+	if err != nil {
+		log.Printf("Error reading downloads directory: %v", err)
+		return
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		path := filepath.Join(m.dataDir, file.Name())
+		if err := os.Remove(path); err != nil {
+			log.Printf("Error deleting file %s: %v", path, err)
+		}
+	}
+}
+
+// delete torrents.json file delete sessain data
+func (m *TorrentManager) DeleteTorrentsJson() {
+	if err := os.Remove(m.sessionPath); err != nil {
+		log.Printf("Error deleting torrents.json: %v", err)
+	}
 }
